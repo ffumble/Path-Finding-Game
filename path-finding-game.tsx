@@ -352,7 +352,7 @@ export default function PathFindingGame() {
         Made by 4nem
       </motion.div>
 
-      <div className="absolute bottom-4 left-4 text-sm text-gray-400">fumble x</div>
+      <div className="absolute top-12 left-4 text-sm text-gray-400">fumble x</div>
 
       <div className="relative">
         <canvas
