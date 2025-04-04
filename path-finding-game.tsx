@@ -8,7 +8,7 @@ import { motion } from "framer-motion"
 const GRID_SIZE = 35
 const CELL_SIZE = 15
 const SCREEN_SIZE = GRID_SIZE * CELL_SIZE
-const TIME_LIMIT = 12 // seconds
+const TIME_LIMIT = 13 // seconds
 const MISTAKES_ALLOWED = 3
 const ERROR_FLASH_DURATION = 200 // milliseconds
 
