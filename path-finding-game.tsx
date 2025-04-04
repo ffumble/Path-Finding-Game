@@ -8,8 +8,9 @@ import { motion } from "framer-motion"
 const GRID_SIZE = 35
 const CELL_SIZE = 15
 const SCREEN_SIZE = GRID_SIZE * CELL_SIZE
-const TIME_LIMIT = 13 // seconds
+const TIME_LIMIT = 12 // seconds
 const MISTAKES_ALLOWED = 3
+const ERROR_FLASH_DURATION = 200 // milliseconds
 
 // Colors
 const GREEN = "#00FF00"
@@ -25,10 +26,44 @@ export default function PathFindingGame() {
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT)
   const [path, setPath] = useState<Array<[number, number]>>([])
   const [playerPos, setPlayerPos] = useState<[number, number]>([0, 0])
+  const [isErrorFlashing, setIsErrorFlashing] = useState(false)
 
-  // Refs for animation
+  // Refs for animation and audio
   const animationFrameRef = useRef<number | null>(null)
   const startTimeRef = useRef<number>(0)
+  const errorSoundRef = useRef<HTMLAudioElement | null>(null)
+  const errorFlashTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Initialize the audio element
+  useEffect(() => {
+    errorSoundRef.current = new Audio("/error-sound.mp3")
+    errorSoundRef.current.volume = 0.5 // Set volume to 50%
+  }, [])
+
+  // Play error sound function
+  const playErrorSound = () => {
+    if (errorSoundRef.current) {
+      errorSoundRef.current.currentTime = 0 // Reset to start
+      errorSoundRef.current.play().catch((err) => console.log("Audio play failed:", err))
+    }
+  }
+
+  // Flash error effect
+  const flashErrorEffect = () => {
+    // Clear any existing timeout
+    if (errorFlashTimeoutRef.current) {
+      clearTimeout(errorFlashTimeoutRef.current)
+    }
+
+    // Set error flash state
+    setIsErrorFlashing(true)
+
+    // Clear error flash after duration
+    errorFlashTimeoutRef.current = setTimeout(() => {
+      setIsErrorFlashing(false)
+      errorFlashTimeoutRef.current = null
+    }, ERROR_FLASH_DURATION)
+  }
 
   // Generate a valid path from bottom to top
   const generatePath = () => {
@@ -123,9 +158,9 @@ export default function PathFindingGame() {
       ctx.fillRect(x * CELL_SIZE + padding, y * CELL_SIZE + padding, CELL_SIZE - padding * 2, CELL_SIZE - padding * 2)
     }
 
-    // Draw player position in green
+    // Draw player position in green or red if error flashing
     const [playerX, playerY] = playerPos
-    ctx.fillStyle = GREEN
+    ctx.fillStyle = isErrorFlashing ? RED : GREEN
     ctx.fillRect(playerX * CELL_SIZE, playerY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
 
     // Draw timer bar at bottom
@@ -142,6 +177,12 @@ export default function PathFindingGame() {
       animationFrameRef.current = null
     }
 
+    // Clear any existing error flash timeout
+    if (errorFlashTimeoutRef.current) {
+      clearTimeout(errorFlashTimeoutRef.current)
+      errorFlashTimeoutRef.current = null
+    }
+
     // Generate new path
     const newPath = generatePath()
     setPath(newPath)
@@ -153,6 +194,7 @@ export default function PathFindingGame() {
     setMistakes(0)
     setTimeLeft(TIME_LIMIT)
     setGameState("playing")
+    setIsErrorFlashing(false)
 
     // Set start time
     startTimeRef.current = Date.now()
@@ -200,9 +242,15 @@ export default function PathFindingGame() {
         setGameState("won")
       }
     } else {
-      // Move is incorrect - just count the mistake
+      // Move is incorrect
       const newMistakes = mistakes + 1
       setMistakes(newMistakes)
+
+      // Play error sound
+      playErrorSound()
+
+      // Flash error effect
+      flashErrorEffect()
 
       // End game if mistakes reach the limit
       if (newMistakes >= MISTAKES_ALLOWED) {
@@ -256,7 +304,19 @@ export default function PathFindingGame() {
   // Draw the game whenever state changes
   useEffect(() => {
     drawGrid()
-  }, [gameState, playerPos, path, timeLeft])
+  }, [gameState, playerPos, path, timeLeft, isErrorFlashing])
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (errorFlashTimeoutRef.current) {
+        clearTimeout(errorFlashTimeoutRef.current)
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [])
 
   // Initialize the canvas
   useEffect(() => {
@@ -337,4 +397,3 @@ export default function PathFindingGame() {
     </div>
   )
 }
-
