@@ -27,6 +27,10 @@ export default function PathFindingGame() {
   const [path, setPath] = useState<Array<[number, number]>>([])
   const [playerPos, setPlayerPos] = useState<[number, number]>([0, 0])
   const [isErrorFlashing, setIsErrorFlashing] = useState(false)
+  // Track the last valid path position
+  const [lastValidPos, setLastValidPos] = useState<[number, number]>([0, 0])
+  // Track if player is currently on a valid path square
+  const [isOnValidPath, setIsOnValidPath] = useState(true)
 
   // Refs for animation and audio
   const animationFrameRef = useRef<number | null>(null)
@@ -116,6 +120,12 @@ export default function PathFindingGame() {
     return path.some(([px, py]) => px === x && py === y)
   }
 
+  // Check if a position is the last valid position
+  const isLastValidPosition = (x: number, y: number) => {
+    const [lastX, lastY] = lastValidPos
+    return x === lastX && y === lastY
+  }
+
   // Check if a move would form a square with existing path cells
   const formsSquare = (path: Array<[number, number]>, x: number, y: number) => {
     const hasPoint = (px: number, py: number) => path.some(([x, y]) => x === px && y === py)
@@ -168,6 +178,13 @@ export default function PathFindingGame() {
       ctx.fillRect(x * CELL_SIZE + padding, y * CELL_SIZE + padding, CELL_SIZE - padding * 2, CELL_SIZE - padding * 2)
     }
 
+    // Draw last valid position with a subtle highlight if player is off path
+    if (!isOnValidPath) {
+      const [lastX, lastY] = lastValidPos
+      ctx.fillStyle = "rgba(255, 255, 0, 0.3)" // Subtle yellow highlight
+      ctx.fillRect(lastX * CELL_SIZE, lastY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    }
+
     // Draw player position in green or red if error flashing
     const [playerX, playerY] = playerPos
     ctx.fillStyle = isErrorFlashing ? RED : GREEN
@@ -198,7 +215,10 @@ export default function PathFindingGame() {
     setPath(newPath)
 
     // Set player at start position
-    setPlayerPos(newPath[0])
+    const startPos: [number, number] = newPath[0]
+    setPlayerPos(startPos)
+    setLastValidPos(startPos)
+    setIsOnValidPath(true)
 
     // Reset game state
     setMistakes(0)
@@ -214,12 +234,12 @@ export default function PathFindingGame() {
   const checkWinCondition = () => {
     const [playerX, playerY] = playerPos
     const endPoint = path[path.length - 1]
-
+    
     // Make sure we have a valid end point
-    if (!endPoint) return
-
+    if (!endPoint) return;
+    
     const [endX, endY] = endPoint
-
+    
     // Check if player is at the end point
     if (playerX === endX && playerY === endY) {
       // Set a small timeout to ensure the final position is rendered before showing win screen
@@ -232,11 +252,10 @@ export default function PathFindingGame() {
   // Handle keyboard input
   const handleKeyDown = (e: KeyboardEvent) => {
     if (gameState !== "playing") return
-
+    
     const [playerX, playerY] = playerPos
-    let dx = 0,
-      dy = 0
-
+    let dx = 0, dy = 0
+    
     // Support both arrow keys and WASD
     switch (e.key.toLowerCase()) {
       case "arrowleft":
@@ -262,33 +281,50 @@ export default function PathFindingGame() {
       default:
         return
     }
-
+    
     const newX = playerX + dx
     const newY = playerY + dy
-
+    
     // Check if the new position is within bounds
     if (isWithinBounds(newX, newY)) {
-      // Always move the player to the new position
-      setPlayerPos([newX, newY])
-
-      // Check if the new position is NOT on the path
-      if (!isOnPath(newX, newY)) {
-        // Count as a mistake
-        const newMistakes = mistakes + 1
-        setMistakes(newMistakes)
-
-        // Play error sound and flash
-        playErrorSound()
-        flashErrorEffect()
-
-        // End game if mistakes reach the limit
-        if (newMistakes >= MISTAKES_ALLOWED) {
-          setGameState("lost")
+      // If player is not on a valid path, they can only move back to the last valid position
+      if (!isOnValidPath) {
+        // Check if the move is to the last valid position
+        if (isLastValidPosition(newX, newY)) {
+          // Allow move back to the last valid position
+          setPlayerPos([newX, newY])
+          setIsOnValidPath(true)
+        } else {
+          // Not allowed to move to any other position
+          // Optionally play a sound or show a visual cue that this move is not allowed
+          return
         }
       } else {
-        // Check if player reached the end of the path
-        // This needs to be called AFTER updating the player position
-        setTimeout(() => checkWinCondition(), 0)
+        // Player is on a valid path, check if the new position is on the path
+        if (isOnPath(newX, newY)) {
+          // Move to new valid path position
+          setPlayerPos([newX, newY])
+          setLastValidPos([newX, newY])
+          // Check if player reached the end of the path
+          setTimeout(() => checkWinCondition(), 0)
+        } else {
+          // Moving to a non-path square
+          setPlayerPos([newX, newY])
+          setIsOnValidPath(false)
+          
+          // Count as a mistake
+          const newMistakes = mistakes + 1
+          setMistakes(newMistakes)
+          
+          // Play error sound and flash
+          playErrorSound()
+          flashErrorEffect()
+          
+          // End game if mistakes reach the limit
+          if (newMistakes >= MISTAKES_ALLOWED) {
+            setGameState("lost")
+          }
+        }
       }
     }
   }
@@ -333,12 +369,12 @@ export default function PathFindingGame() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown)
     }
-  }, [gameState, playerPos, path, mistakes])
+  }, [gameState, playerPos, path, mistakes, isOnValidPath, lastValidPos])
 
   // Draw the game whenever state changes
   useEffect(() => {
     drawGrid()
-  }, [gameState, playerPos, path, timeLeft, isErrorFlashing])
+  }, [gameState, playerPos, path, timeLeft, isErrorFlashing, isOnValidPath, lastValidPos])
 
   // Clean up on unmount
   useEffect(() => {
@@ -366,10 +402,10 @@ export default function PathFindingGame() {
 
   // Check win condition whenever player position changes
   useEffect(() => {
-    if (gameState === "playing") {
-      checkWinCondition()
+    if (gameState === "playing" && isOnValidPath) {
+      checkWinCondition();
     }
-  }, [playerPos])
+  }, [playerPos, isOnValidPath]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4 relative">
