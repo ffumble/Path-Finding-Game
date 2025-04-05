@@ -8,7 +8,7 @@ import { motion } from "framer-motion"
 const GRID_SIZE = 35
 const CELL_SIZE = 15
 const SCREEN_SIZE = GRID_SIZE * CELL_SIZE
-const TIME_LIMIT = 13 // seconds
+const TIME_LIMIT = 12 // seconds
 const MISTAKES_ALLOWED = 3
 const ERROR_FLASH_DURATION = 200 // milliseconds
 
@@ -101,9 +101,19 @@ export default function PathFindingGame() {
     return newPath
   }
 
-  // Check if a move is valid
+  // Check if a move is valid (for path generation)
   const isValidMove = (path: Array<[number, number]>, x: number, y: number) => {
     return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && !path.some(([px, py]) => px === x && py === y)
+  }
+
+  // Check if a position is within grid bounds
+  const isWithinBounds = (x: number, y: number) => {
+    return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE
+  }
+
+  // Check if a position is on the path
+  const isOnPath = (x: number, y: number) => {
+    return path.some(([px, py]) => px === x && py === y)
   }
 
   // Check if a move would form a square with existing path cells
@@ -200,6 +210,25 @@ export default function PathFindingGame() {
     startTimeRef.current = Date.now()
   }
 
+  // Check if player has reached the end of the path
+  const checkWinCondition = () => {
+    const [playerX, playerY] = playerPos
+    const endPoint = path[path.length - 1]
+
+    // Make sure we have a valid end point
+    if (!endPoint) return
+
+    const [endX, endY] = endPoint
+
+    // Check if player is at the end point
+    if (playerX === endX && playerY === endY) {
+      // Set a small timeout to ensure the final position is rendered before showing win screen
+      setTimeout(() => {
+        setGameState("won")
+      }, 50)
+    }
+  }
+
   // Handle keyboard input
   const handleKeyDown = (e: KeyboardEvent) => {
     if (gameState !== "playing") return
@@ -208,20 +237,25 @@ export default function PathFindingGame() {
     let dx = 0,
       dy = 0
 
-    switch (e.key) {
-      case "ArrowLeft":
+    // Support both arrow keys and WASD
+    switch (e.key.toLowerCase()) {
+      case "arrowleft":
+      case "a":
         dx = -1
         e.preventDefault()
         break
-      case "ArrowRight":
+      case "arrowright":
+      case "d":
         dx = 1
         e.preventDefault()
         break
-      case "ArrowUp":
+      case "arrowup":
+      case "w":
         dy = -1
         e.preventDefault()
         break
-      case "ArrowDown":
+      case "arrowdown":
+      case "s":
         dy = 1
         e.preventDefault()
         break
@@ -229,32 +263,32 @@ export default function PathFindingGame() {
         return
     }
 
-    const newPos: [number, number] = [playerX + dx, playerY + dy]
-    const currentIndex = path.findIndex(([x, y]) => x === playerX && y === playerY)
-    const nextCorrectPos = path[currentIndex + 1]
+    const newX = playerX + dx
+    const newY = playerY + dy
 
-    if (nextCorrectPos && newPos[0] === nextCorrectPos[0] && newPos[1] === nextCorrectPos[1]) {
-      // Move is correct
-      setPlayerPos(newPos)
+    // Check if the new position is within bounds
+    if (isWithinBounds(newX, newY)) {
+      // Always move the player to the new position
+      setPlayerPos([newX, newY])
 
-      // Check if player reached the end
-      if (currentIndex + 1 === path.length - 1) {
-        setGameState("won")
-      }
-    } else {
-      // Move is incorrect
-      const newMistakes = mistakes + 1
-      setMistakes(newMistakes)
+      // Check if the new position is NOT on the path
+      if (!isOnPath(newX, newY)) {
+        // Count as a mistake
+        const newMistakes = mistakes + 1
+        setMistakes(newMistakes)
 
-      // Play error sound
-      playErrorSound()
+        // Play error sound and flash
+        playErrorSound()
+        flashErrorEffect()
 
-      // Flash error effect
-      flashErrorEffect()
-
-      // End game if mistakes reach the limit
-      if (newMistakes >= MISTAKES_ALLOWED) {
-        setGameState("lost")
+        // End game if mistakes reach the limit
+        if (newMistakes >= MISTAKES_ALLOWED) {
+          setGameState("lost")
+        }
+      } else {
+        // Check if player reached the end of the path
+        // This needs to be called AFTER updating the player position
+        setTimeout(() => checkWinCondition(), 0)
       }
     }
   }
@@ -330,6 +364,13 @@ export default function PathFindingGame() {
     }
   }, [])
 
+  // Check win condition whenever player position changes
+  useEffect(() => {
+    if (gameState === "playing") {
+      checkWinCondition()
+    }
+  }, [playerPos])
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4 relative">
       <motion.div
@@ -352,7 +393,7 @@ export default function PathFindingGame() {
         Made by 4nem
       </motion.div>
 
-      
+      <div className="absolute bottom-4 left-4 text-sm text-gray-400">fumble x</div>
 
       <div className="relative">
         <canvas
@@ -378,8 +419,8 @@ export default function PathFindingGame() {
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-4 text-white">Path Finding Game</h2>
               <p className="text-gray-300 mb-4">
-                Use arrow keys to navigate the path. You have {TIME_LIMIT} seconds and {MISTAKES_ALLOWED} mistakes
-                allowed.
+                Use arrow keys or WASD to navigate the path. You have {TIME_LIMIT} seconds and {MISTAKES_ALLOWED}{" "}
+                mistakes allowed.
               </p>
               <Button onClick={startGame} className="bg-gray-700 hover:bg-gray-600" autoFocus>
                 Start Game
