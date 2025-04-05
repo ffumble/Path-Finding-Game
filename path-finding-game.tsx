@@ -11,6 +11,7 @@ const SCREEN_SIZE = GRID_SIZE * CELL_SIZE
 const TIME_LIMIT = 12 // seconds
 const MISTAKES_ALLOWED = 3
 const ERROR_FLASH_DURATION = 200 // milliseconds
+const MAX_HORIZONTAL_DEVIATION = 4 // Maximum squares to the left or right
 
 // Colors
 const GREEN = "#00FF00"
@@ -72,16 +73,17 @@ export default function PathFindingGame() {
   // Generate a valid path from bottom to top
   const generatePath = () => {
     const newPath: Array<[number, number]> = []
-    let x = Math.floor(GRID_SIZE / 2)
+    const startX = Math.floor(GRID_SIZE / 2)
+    let x = startX
     let y = GRID_SIZE - 1
     newPath.push([x, y])
 
     while (y > 0) {
       // Only allow up, left, right
       const directions = [
-        [0, -1],
-        [-1, 0],
-        [1, 0],
+        [0, -1], // up
+        [-1, 0], // left
+        [1, 0], // right
       ]
       shuffleArray(directions)
 
@@ -90,7 +92,12 @@ export default function PathFindingGame() {
         const nx = x + dx
         const ny = y + dy
 
-        if (isValidMove(newPath, nx, ny) && !formsSquare(newPath, nx, ny)) {
+        // Check if the move is valid and within horizontal limits
+        if (
+          isValidMove(newPath, nx, ny) &&
+          !formsSquare(newPath, nx, ny) &&
+          Math.abs(nx - startX) <= MAX_HORIZONTAL_DEVIATION
+        ) {
           x = nx
           y = ny
           newPath.push([x, y])
@@ -99,7 +106,18 @@ export default function PathFindingGame() {
         }
       }
 
-      if (!moved) break // No valid moves, path ends
+      if (!moved) {
+        // If no valid moves, prioritize moving up
+        const upX = x
+        const upY = y - 1
+        if (isValidMove(newPath, upX, upY)) {
+          x = upX
+          y = upY
+          newPath.push([x, y])
+        } else {
+          break // No valid moves, path ends
+        }
+      }
     }
 
     return newPath
@@ -234,12 +252,12 @@ export default function PathFindingGame() {
   const checkWinCondition = () => {
     const [playerX, playerY] = playerPos
     const endPoint = path[path.length - 1]
-    
+
     // Make sure we have a valid end point
-    if (!endPoint) return;
-    
+    if (!endPoint) return
+
     const [endX, endY] = endPoint
-    
+
     // Check if player is at the end point
     if (playerX === endX && playerY === endY) {
       // Set a small timeout to ensure the final position is rendered before showing win screen
@@ -252,10 +270,11 @@ export default function PathFindingGame() {
   // Handle keyboard input
   const handleKeyDown = (e: KeyboardEvent) => {
     if (gameState !== "playing") return
-    
+
     const [playerX, playerY] = playerPos
-    let dx = 0, dy = 0
-    
+    let dx = 0,
+      dy = 0
+
     // Support both arrow keys and WASD
     switch (e.key.toLowerCase()) {
       case "arrowleft":
@@ -281,10 +300,10 @@ export default function PathFindingGame() {
       default:
         return
     }
-    
+
     const newX = playerX + dx
     const newY = playerY + dy
-    
+
     // Check if the new position is within bounds
     if (isWithinBounds(newX, newY)) {
       // If player is not on a valid path, they can only move back to the last valid position
@@ -311,15 +330,15 @@ export default function PathFindingGame() {
           // Moving to a non-path square
           setPlayerPos([newX, newY])
           setIsOnValidPath(false)
-          
+
           // Count as a mistake
           const newMistakes = mistakes + 1
           setMistakes(newMistakes)
-          
+
           // Play error sound and flash
           playErrorSound()
           flashErrorEffect()
-          
+
           // End game if mistakes reach the limit
           if (newMistakes >= MISTAKES_ALLOWED) {
             setGameState("lost")
@@ -403,9 +422,9 @@ export default function PathFindingGame() {
   // Check win condition whenever player position changes
   useEffect(() => {
     if (gameState === "playing" && isOnValidPath) {
-      checkWinCondition();
+      checkWinCondition()
     }
-  }, [playerPos, isOnValidPath]);
+  }, [playerPos, isOnValidPath])
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 p-4 relative">
